@@ -22,7 +22,7 @@ The extension is built around a Manifest V3 service worker and an offscreen docu
 
 - [background.js](background.js) manages extension state, the offscreen document, active-tab tracking, tab capture orchestration, and popup messaging.
 - [offscreen.js](offscreen.js) creates the audio graph and coordinates the real-time processing pipeline.
-- [ulunas-worker.js](ulunas-worker.js) runs the FastEnhancer ONNX model in a worker.
+- [fastenhancer-worker.js](fastenhancer-worker.js) runs the FastEnhancer ONNX model in a worker.
 - [ring-buffer-audio-processor.js](ring-buffer-audio-processor.js) bridges audio frames between the Web Audio graph and the worker through shared buffers.
 - [rnnoise-worklet.js](rnnoise-worklet.js) runs RNNoise as an AudioWorklet stage.
 - [popup.js](popup.js) powers the browser action UI.

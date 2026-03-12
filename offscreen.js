@@ -8,7 +8,7 @@
 'use strict';
 
 const MODEL_URL = chrome.runtime.getURL('assets/fastenhancer_s.onnx');
-const WORKER_URL = chrome.runtime.getURL('ulunas-worker.js');
+const WORKER_URL = chrome.runtime.getURL('fastenhancer-worker.js');
 const PROCESSOR_URL = chrome.runtime.getURL('ring-buffer-audio-processor.js');
 const RNNOISE_WASM_URL = chrome.runtime.getURL('assets/rnnoise.wasm');
 const RNNOISE_PROCESSOR_URL = chrome.runtime.getURL('rnnoise-worklet.js');
