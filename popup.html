@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NoMusic</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <img class="brand-mark" src="icons/NoMusic(transparent).png" alt="NoMusic logo" aria-hidden="true" />
+      <div class="brand-copy">
+        <h1 class="brand-title">NoMusic</h1>
+        <p class="brand-subtitle">Remove Background Music.</p>
+      </div>
+      <div class="lang-switcher" id="langSwitcher">
+        <button class="lang-btn active" id="langEN">EN</button>
+        <button class="lang-btn" id="langAR">ع</button>
+      </div>
+    </header>
+
+    <section class="hero-card">
+      <div class="tab-card" id="tabCard">
+        <img class="tab-favicon" id="tabFavicon" src="" alt="" width="16" height="16" style="display:none" />
+        <svg class="tab-icon" id="tabIconSvg" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="1" y="3" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M1 6h14" stroke="currentColor" stroke-width="1.3"/>
+          <circle cx="8" cy="10" r="1.5" fill="currentColor"/>
+        </svg>
+        <span class="tab-title" id="tabTitle">Detecting tab…</span>
+      </div>
+
+      <div class="visualizer-wrap" id="visualizerWrap">
+        <canvas id="visualizerCanvas" class="visualizer-canvas" width="320" height="72"></canvas>
+        <div class="visualizer-label" id="vizLabel">Ready</div>
+      </div>
+
+      <button class="power-btn" id="powerBtn" aria-label="Toggle filtering" disabled>
+        <span class="power-label" id="powerLabel">Turn on</span>
+      </button>
+    </section>
+
+    <div class="loading-overlay" id="loadingOverlay" style="display:none">
+      <div class="loading-inner">
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="loading-title" id="loadingTitle">Getting ready…</p>
+        <p class="loading-sub" id="loadingSub">Preparing your audio.</p>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-toast" id="errorToast" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" width="16" height="16" aria-hidden="true">
+        <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M8 5v4M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span id="errorMsg">Error</span>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
