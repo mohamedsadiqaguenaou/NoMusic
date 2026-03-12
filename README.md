@@ -1,6 +1,7 @@
-# NoMusic
+# NoMusic - Remove Background Music From Videos
 
-NoMusic is a Chrome extension that removes or suppresses background music from tab audio in real time with an entirely local processing pipeline.
+
+NoMusic is a browser extension that removes background music from tab audio in real time with an entirely local processing pipeline.
 
 Chrome Web Store:
 https://chromewebstore.google.com/detail/fepfnjijcojaoihcekfhonohejglmdbc?utm_source=github.com
