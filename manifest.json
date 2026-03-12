@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NoMusic - Watch Any Video Without Background Music",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "AI-powered extension that removes background music from any video. Made for Muslims who want to watch online content without music.",
   "action": {
     "default_popup": "popup.html",
