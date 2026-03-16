@@ -2,7 +2,7 @@
     'use strict';
 
     const EXTENSION_BASE_URL = self.location.origin + '/';
-    const ORT_BASE_URL = EXTENSION_BASE_URL + 'assets/vendor/onnxruntime/';
+    const ORT_BASE_URL = EXTENSION_BASE_URL + 'assets/vendor/onnxruntime-web/';
     const MODEL_PATH = EXTENSION_BASE_URL + 'assets/fastenhancer_s.onnx';
     const HOP_SIZE = 512;
     const CHANNEL_COUNT = 2;

@@ -10,9 +10,11 @@ https://chromewebstore.google.com/detail/fepfnjijcojaoihcekfhonohejglmdbc?utm_so
 
 - Captures the active tab audio stream.
 - Runs speech enhancement in the browser with ONNX Runtime Web and Web Audio worklets.
+- Offers multiple audio models (Standard and Lite) to balance between processing power and audio quality.
 - Applies RNNoise denoising after enhancement.
 - Auto-follows the active tab when the extension is enabled.
 - Keeps processing on-device with no backend service.
+- Includes English and Arabic localizations for the popup interface.
 
 The current extension is aimed at people who want to watch online video content without background music.
 
@@ -66,7 +68,7 @@ NoMusic is designed to process audio locally in the browser. This repository doe
 
 ## Third-Party Components
 
-This repository includes or depends on third-party runtime/model assets, including ONNX Runtime Web, RNNoise runtime assets, and the FastEnhancer model file committed under [assets](assets).
+This repository includes or depends on third-party runtime/model assets, including ONNX Runtime Web, RNNoise runtime assets, and the FastEnhancer model files committed under [assets](assets).
 
 If you redistribute this project, keep the relevant third-party license terms, attribution requirements, and model usage terms in mind.
 
@@ -76,7 +78,7 @@ This project builds on open-source speech enhancement and inference work from th
 
 - FastEnhancer: https://github.com/aask1357/fastenhancer
 	- Source for the FastEnhancer speech-enhancement model family.
-	- The bundled [assets/fastenhancer_s.onnx](assets/fastenhancer_s.onnx) is based on the FastEnhancer ONNX releases.
+	- The bundled `assets/fastenhancer_s.onnx` (Standard) and `assets/fastenhancer_t.onnx` (Lite) are based on the FastEnhancer ONNX releases.
 - RNNoise: https://github.com/xiph/rnnoise
 	- Source for the RNNoise denoising model/runtime used in the browser audio pipeline.
 	- The bundled [assets/rnnoise.wasm](assets/rnnoise.wasm) and [rnnoise-worklet.js](rnnoise-worklet.js) are part of this integration layer.

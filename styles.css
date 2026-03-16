@@ -182,6 +182,63 @@ body {
 	color: var(--muted);
 }
 
+/* ── Model switcher ──────────────────────────────────────────────────────── */
+.model-switcher {
+	display: flex;
+	direction: ltr;
+	margin-top: 12px;
+	border: 2px solid var(--line);
+	border-radius: 14px;
+	background: #fff;
+	box-shadow: 3px 3px 0 var(--line);
+	overflow: hidden;
+}
+
+.model-btn {
+	flex: 1;
+	padding: 9px 0;
+	border: none;
+	background: transparent;
+	color: var(--muted);
+	font-size: 12px;
+	font-weight: 700;
+	font-family: inherit;
+	cursor: pointer;
+	transition: background var(--transition), color var(--transition);
+	letter-spacing: 0.01em;
+}
+
+.model-btn:first-child {
+	border-inline-end: 1.5px solid var(--soft-line);
+}
+
+.model-btn.active {
+	background: var(--ink);
+	color: #fff;
+}
+
+.model-btn:hover:not(.active) {
+	background: rgba(17, 17, 17, 0.07);
+}
+
+.model-btn .model-badge {
+	display: inline-block;
+	margin-left: 5px;
+	font-size: 9px;
+	font-weight: 800;
+	padding: 1px 5px;
+	border-radius: 999px;
+	background: rgba(255,144,201,0.22);
+	color: var(--pink);
+	vertical-align: middle;
+	letter-spacing: 0.03em;
+}
+
+.model-btn.active .model-badge {
+	background: rgba(255,255,255,0.2);
+	color: #fff;
+}
+
 .power-btn {
 	width: 100%;
 	margin-top: 16px;

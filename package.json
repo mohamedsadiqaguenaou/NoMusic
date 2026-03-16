@@ -16,5 +16,8 @@
   ],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "onnxruntime-web": "^1.24.3"
+  }
 }

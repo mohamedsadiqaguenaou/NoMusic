@@ -11,6 +11,20 @@
 
 'use strict';
 
+const MODEL_URLS = {
+  lite:     'assets/fastenhancer_t.onnx',
+  standard: 'assets/fastenhancer_s.onnx'
+};
+
+function getModelUrl() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['nomusic_model'], r => {
+      const tier = r.nomusic_model === 'lite' ? 'lite' : 'standard';
+      resolve(chrome.runtime.getURL(MODEL_URLS[tier]));
+    });
+  });
+}
+
 let offscreenCreating = false;
 let extensionEnabled  = true;   // defaults ON — loaded from storage below
 let activeTabId       = null;
@@ -182,11 +196,13 @@ async function _doCapture(newTabId) {
 
     activeTabId = newTabId;
     await ensureOffscreen();
+    const modelUrl = await getModelUrl();
     chrome.runtime.sendMessage({
       type:             'DF_START',
       streamId,
       tabId:            newTabId,
-      suppressionLevel: 100
+      suppressionLevel: 100,
+      modelUrl
     }).catch(() => {});
   } catch (err) {
     console.warn('[NoMusic] autoCapture failed for tab', newTabId, ':', err.message);
@@ -279,7 +295,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         type:             'DF_START',
         streamId:         msg.streamId,
         tabId:            msg.tabId,
-        suppressionLevel: msg.suppressionLevel
+        suppressionLevel: msg.suppressionLevel,
+        modelUrl:         msg.modelUrl
       });
       sendResponse({ ok: true });
     })();

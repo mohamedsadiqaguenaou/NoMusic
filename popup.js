@@ -25,6 +25,8 @@ const TRANSLATIONS = {
     loadingSubInit:      'Preparing your audio.',
     errorNoAccess:       'Could not access this tab audio.',
     errorNoStream:       'Could not start filtering.',
+    modelLite:           'Lite',
+    modelStd:            'Standard',
   },
   ar: {
     brandSubtitle:       'إزالة الموسيقى الخلفية.',
@@ -49,6 +51,8 @@ const TRANSLATIONS = {
     loadingSubInit:      'جارٍ تجهيز صوتك.',
     errorNoAccess:       'تعذّر الوصول إلى صوت هذا التبويب.',
     errorNoStream:       'تعذّر بدء التصفية.',
+    modelLite:           'خفيف',
+    modelStd:            'قوي',
   }
 };
 
@@ -89,6 +93,10 @@ function refreshDynamicText() {
   }
 
   if (!activeTabId) tabTitle.textContent = t('tabDetecting');
+
+  // Re-translate model buttons
+  modelLiteBtn.textContent = t('modelLite');
+  modelStdBtn.textContent  = t('modelStd');
 }
 
 // Convenience setters
@@ -106,6 +114,13 @@ let activeTabId    = null;
 let extensionEnabled = true;
 let animFrameId    = null;
 let freqData       = null;
+let currentModel   = 'standard'; // 'lite' | 'standard' — loaded from storage in boot()
+let pendingModelSwitch = false;  // true while we're restarting due to a model change
+
+const MODEL_URLS = {
+  lite:     chrome.runtime.getURL('assets/fastenhancer_t.onnx'),
+  standard: chrome.runtime.getURL('assets/fastenhancer_s.onnx')
+};
 
 const $ = id => document.getElementById(id);
 const powerBtn         = $('powerBtn');
@@ -124,6 +139,8 @@ const tabFavicon       = $('tabFavicon');
 const tabIconSvg       = $('tabIconSvg');
 const langEN           = $('langEN');
 const langAR           = $('langAR');
+const modelLiteBtn     = $('modelLite');
+const modelStdBtn      = $('modelStd');
 const ctx2d            = vizCanvas.getContext('2d');
 
 // ── Lang switcher ──────────────────────────────────────────────────────────────────────────
@@ -151,7 +168,8 @@ async function startFiltering() {
         type: 'START_FILTERING',
         streamId,
         tabId: activeTabId,
-        suppressionLevel: 100
+        suppressionLevel: 100,
+        modelUrl: MODEL_URLS[currentModel]
       }, resp => {
         if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
         else if (resp && resp.ok) resolve();
@@ -211,6 +229,13 @@ function handleStatus(msg) {
       visualizerWrap.classList.remove('active');
       stopVisualizer();
       freqData = null;
+
+      // If we stopped because the user switched models, restart immediately
+      if (pendingModelSwitch) {
+        pendingModelSwitch = false;
+        startFiltering();
+        break;
+      }
 
       if (extensionEnabled) {
         setPower(true);
@@ -352,6 +377,30 @@ function showError(msg) {
   errorTimer = setTimeout(() => { errorToast.style.display = 'none'; }, 4000);
 }
 
+// ── Model switcher ─────────────────────────────────────────────────────────────────
+function applyModel(tier) {
+  currentModel = tier;
+  chrome.storage.local.set({ nomusic_model: tier });
+  modelLiteBtn.classList.toggle('active', tier === 'lite');
+  modelStdBtn.classList.toggle('active',  tier === 'standard');
+}
+
+function _initModelSwitcher() {
+  function switchModel(tier) {
+    if (currentModel === tier) return;
+    applyModel(tier);
+
+    // If currently active, stop then restart via the pendingModelSwitch flag
+    if (isActive) {
+      pendingModelSwitch = true;
+      stopFiltering();
+    }
+  }
+
+  modelLiteBtn.addEventListener('click', () => switchModel('lite'));
+  modelStdBtn.addEventListener('click',  () => switchModel('standard'));
+}
+
 powerBtn.addEventListener('click', () => {
   powerBtn.disabled = true;
   chrome.runtime.sendMessage({ type: 'TOGGLE_EXTENSION' }, resp => {
@@ -378,6 +427,15 @@ async function boot() {
   // Apply saved language first
   _initLangSwitcher();
   applyLang(currentLang);
+
+  // Load saved model preference (default: standard)
+  await new Promise(resolve => {
+    chrome.storage.local.get(['nomusic_model'], r => {
+      applyModel(r.nomusic_model === 'lite' ? 'lite' : 'standard');
+      resolve();
+    });
+  });
+  _initModelSwitcher();
 
   // 1. Get active tab info
   const tabResp = await new Promise(r => chrome.runtime.sendMessage({ type: 'GET_ACTIVE_TAB' }, r));

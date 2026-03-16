@@ -7,7 +7,7 @@
 
 'use strict';
 
-const MODEL_URL = chrome.runtime.getURL('assets/fastenhancer_s.onnx');
+const DEFAULT_MODEL_URL = chrome.runtime.getURL('assets/fastenhancer_s.onnx');
 const WORKER_URL = chrome.runtime.getURL('fastenhancer-worker.js');
 const PROCESSOR_URL = chrome.runtime.getURL('ring-buffer-audio-processor.js');
 const RNNOISE_WASM_URL = chrome.runtime.getURL('assets/rnnoise.wasm');
@@ -37,6 +37,7 @@ let warmWorklet = null;
 let warmWorker = null;
 let warmRawSab = null;
 let warmDenoSab = null;
+let warmModelUrl = null;  // which model URL the current warm worker was loaded with
 let activeWorker = null;
 let engineReady = false;
 let warming = null;
@@ -108,8 +109,18 @@ async function createRnnoiseChain(ctx) {
   return { splitter, merger, nodes };
 }
 
-async function preWarmEngine() {
-  if (engineReady) return;
+async function preWarmEngine(modelUrl) {
+  const targetModel = modelUrl || DEFAULT_MODEL_URL;
+  if (engineReady && warmModelUrl === targetModel) return;
+  // If engine is ready but for a different model, tear it down first
+  if (engineReady && warmModelUrl !== targetModel) {
+    engineReady = false;
+    warming = null;
+    if (warmWorker) { try { warmWorker.postMessage({ command: 'stop' }); warmWorker.terminate(); } catch (_) {} }
+    if (warmCtx) { try { warmCtx.close(); } catch (_) {} }
+    warmWorker = null; warmCtx = null; warmWorklet = null;
+    warmRawSab = null; warmDenoSab = null; warmModelUrl = null;
+  }
   if (warming) return warming;
 
   warming = (async () => {
@@ -135,7 +146,7 @@ async function preWarmEngine() {
             command: 'init',
             rawSab,
             denoisedSab: denoSab,
-            modelUrl: MODEL_URL,
+            modelUrl: targetModel,
             suppressionLevel: 100
           });
           return;
@@ -194,6 +205,7 @@ async function preWarmEngine() {
     warmWorker = worker;
     warmRawSab = rawSab;
     warmDenoSab = denoSab;
+    warmModelUrl = targetModel;
     engineReady = true;
     warming = null;
 
@@ -203,21 +215,24 @@ async function preWarmEngine() {
     warming = null;
     warmCtx = null;
     warmWorklet = null;
+    warmModelUrl = null;
     throw err;
   });
 
   return warming;
 }
 
-async function start({ streamId, suppressionLevel = 100 }) {
+async function start({ streamId, suppressionLevel = 100, modelUrl }) {
   if (startInProgress) return;
   startInProgress = true;
 
   if (isActive) await stop();
 
+  const targetModel = modelUrl || DEFAULT_MODEL_URL;
+
   try {
     sendStatus('loading', { step: 'model', progress: 0.2 });
-    await preWarmEngine();
+    await preWarmEngine(targetModel);
     sendStatus('loading', { step: 'compiling', progress: 0.8 });
     sendStatus('loading', { step: 'capture', progress: 1 });
 
@@ -303,7 +318,7 @@ async function start({ streamId, suppressionLevel = 100 }) {
       chrome.runtime.sendMessage({ type: 'DF_FREQ_DATA', data: Array.from(freqData) }).catch(() => {});
     }, 50);
 
-    preWarmEngine().catch(() => {});
+    preWarmEngine(targetModel).catch(() => {});
   } catch (err) {
     console.error('[NoMusic] FastEnhancer start error:', err);
     await stop(true);
@@ -366,7 +381,7 @@ async function stop(keepStatus) {
   if (!keepStatus) sendStatus('stopped');
 }
 
-preWarmEngine().catch(() => {});
+preWarmEngine(DEFAULT_MODEL_URL).catch(() => {});
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   switch (msg.type) {
