@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="https://github.com/mohamedsadiqaguenaou/NoMusic/blob/main/icons/NoMusic(transparent).png?raw=true" alt="NoMusic" width="200"/>
+</div>
+
 # NoMusic - Remove Background Music From Videos
 
 
