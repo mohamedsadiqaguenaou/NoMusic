@@ -13,7 +13,7 @@ https://chromewebstore.google.com/detail/fepfnjijcojaoihcekfhonohejglmdbc?utm_so
 ## What It Does
 
 - Captures the active tab audio stream.
-- Runs speech enhancement in the browser with ONNX Runtime Web and Web Audio worklets.
+- Runs speech enhancement in the browser with ONNX Runtime Web (`onnxruntime-web`) and Web Audio worklets.
 - Offers multiple audio models (Standard and Lite) to balance between processing power and audio quality.
 - Applies RNNoise denoising after enhancement.
 - Auto-follows the active tab when the extension is enabled.
@@ -86,9 +86,9 @@ This project builds on open-source speech enhancement and inference work from th
 - RNNoise: https://github.com/xiph/rnnoise
 	- Source for the RNNoise denoising model/runtime used in the browser audio pipeline.
 	- The bundled [assets/rnnoise.wasm](assets/rnnoise.wasm) and [rnnoise-worklet.js](rnnoise-worklet.js) are part of this integration layer.
-- ONNX Runtime: https://github.com/microsoft/onnxruntime
+- ONNX Runtime Web (`onnxruntime-web`): https://github.com/microsoft/onnxruntime
 	- Source for the ONNX Runtime Web engine used to execute the FastEnhancer model in-browser.
-	- Bundled runtime files live under [assets/vendor/onnxruntime](assets/vendor/onnxruntime).
+	- Bundled runtime files live under [assets/vendor/onnxruntime-web](assets/vendor/onnxruntime-web).
 
 Credit goes to the authors and contributors of those projects for the underlying models, runtimes, and research this extension depends on.
 
