@@ -38,6 +38,7 @@ let warmWorker = null;
 let warmRawSab = null;
 let warmDenoSab = null;
 let warmModelUrl = null;  // which model URL the current warm worker was loaded with
+let warmRnnoiseChain = null; // cached RNNoise splitter/merger/nodes for the warm ctx
 let activeWorker = null;
 let engineReady = false;
 let warming = null;
@@ -78,6 +79,9 @@ async function createRnnoiseChain(ctx) {
   const readyPromises = [];
 
   for (let channel = 0; channel < CHANNEL_COUNT; channel++) {
+    // Slice a copy for each channel — Transfer on first channel would invalidate the buffer
+    // for subsequent channels, so we always pass a copy (slice).
+    const channelBytes = wasmBytes.slice(0);
     const node = new AudioWorkletNode(ctx, 'rnnoise-processor', {
       numberOfInputs: 1,
       numberOfOutputs: 1,
@@ -85,14 +89,15 @@ async function createRnnoiseChain(ctx) {
       channelCountMode: 'explicit',
       channelInterpretation: 'speakers',
       outputChannelCount: [1],
-      processorOptions: { wasmBytes }
+      processorOptions: { wasmBytes: channelBytes }
     });
 
     readyPromises.push(new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('RNNoise processor ready timeout')), 10000);
       node.port.onmessage = (event) => {
-        if (event.data && event.data.type === 'PROCESSOR_READY') resolve();
+        if (event.data && event.data.type === 'PROCESSOR_READY') { clearTimeout(timer); resolve(); }
       };
-      node.onprocessorerror = () => reject(new Error('RNNoise processor warm-up failed'));
+      node.onprocessorerror = () => { clearTimeout(timer); reject(new Error('RNNoise processor warm-up failed')); };
     }));
 
     splitter.connect(node, channel, 0);
@@ -117,6 +122,12 @@ async function preWarmEngine(modelUrl) {
     engineReady = false;
     warming = null;
     if (warmWorker) { try { warmWorker.postMessage({ command: 'stop' }); warmWorker.terminate(); } catch (_) {} }
+    if (warmRnnoiseChain) {
+      try { warmRnnoiseChain.splitter.disconnect(); } catch (_) {}
+      try { warmRnnoiseChain.merger.disconnect(); } catch (_) {}
+      for (const n of warmRnnoiseChain.nodes) { try { n.port.postMessage({ type: 'STOP' }); n.disconnect(); } catch (_) {} }
+      warmRnnoiseChain = null;
+    }
     if (warmCtx) { try { warmCtx.close(); } catch (_) {} }
     warmWorker = null; warmCtx = null; warmWorklet = null;
     warmRawSab = null; warmDenoSab = null; warmModelUrl = null;
@@ -200,12 +211,16 @@ async function preWarmEngine(modelUrl) {
     });
     node.port.onmessage = null;
 
+    // Pre-build the RNNoise chain once for this AudioContext — reused on every start()
+    const rnChain = await createRnnoiseChain(ctx);
+
     warmCtx = ctx;
     warmWorklet = node;
     warmWorker = worker;
     warmRawSab = rawSab;
     warmDenoSab = denoSab;
     warmModelUrl = targetModel;
+    warmRnnoiseChain = rnChain;
     engineReady = true;
     warming = null;
 
@@ -215,6 +230,7 @@ async function preWarmEngine(modelUrl) {
     warming = null;
     warmCtx = null;
     warmWorklet = null;
+    warmRnnoiseChain = null;
     warmModelUrl = null;
     throw err;
   });
@@ -242,11 +258,15 @@ async function start({ streamId, suppressionLevel = 100, modelUrl }) {
     activeSabs = { rawSab: warmRawSab, denoSab: warmDenoSab };
     activeWorker = worker;
 
+    // Take the pre-built RNNoise chain — do NOT create a new one (avoids WASM OOM)
+    const rnnoiseChain = warmRnnoiseChain;
+
     warmCtx = null;
     warmWorklet = null;
     warmWorker = null;
     warmRawSab = null;
     warmDenoSab = null;
+    warmRnnoiseChain = null;
     engineReady = false;
 
     worker.postMessage({ command: 'RESET_BUFFERS' });
@@ -282,7 +302,6 @@ async function start({ streamId, suppressionLevel = 100, modelUrl }) {
 
     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-  const rnnoiseChain = await createRnnoiseChain(audioCtx);
   rnnoiseSplitNode = rnnoiseChain.splitter;
   rnnoiseMergeNode = rnnoiseChain.merger;
   rnnoiseNodes = rnnoiseChain.nodes;
@@ -318,7 +337,9 @@ async function start({ streamId, suppressionLevel = 100, modelUrl }) {
       chrome.runtime.sendMessage({ type: 'DF_FREQ_DATA', data: Array.from(freqData) }).catch(() => {});
     }, 50);
 
-    preWarmEngine(targetModel).catch(() => {});
+    // Do NOT call preWarmEngine here — creating new WASM while the session is active
+    // would OOM. The warm pool is replenished automatically when stop() recycles this
+    // AudioContext and RNNoise chain back, so next start() is instant at no extra cost.
   } catch (err) {
     console.error('[NoMusic] FastEnhancer start error:', err);
     await stop(true);
@@ -332,33 +353,57 @@ async function stop(keepStatus) {
   clearInterval(animInterval);
   animInterval = null;
 
-  const disconnect = (node) => {
+  const disconnectAll = (node) => {
     try { node && node.disconnect(); } catch (_) {}
   };
 
-  disconnect(sourceNode);
-  disconnect(analyzerNode);
-  disconnect(outputGainNode);
-  disconnect(rnnoiseSplitNode);
-  disconnect(rnnoiseMergeNode);
-  for (const node of rnnoiseNodes) disconnect(node);
+  // Fully disconnect source and output chain — these are never recycled.
+  disconnectAll(sourceNode);
+  disconnectAll(analyzerNode);
+  disconnectAll(outputGainNode);
   sourceNode = null;
   analyzerNode = null;
   outputGainNode = null;
-  rnnoiseSplitNode = null;
-  rnnoiseMergeNode = null;
-  rnnoiseNodes = [];
 
   if (workletNode && audioCtx) {
-    try { workletNode.disconnect(); } catch (_) {}
     if (!engineReady && !warmWorklet) {
-      warmWorklet = workletNode;
-      warmCtx = audioCtx;
-      warmWorker = activeWorker;
-      warmRawSab = activeSabs ? activeSabs.rawSab : null;
-      warmDenoSab = activeSabs ? activeSabs.denoSab : null;
-      engineReady = !!warmCtx;
+      // ── RECYCLE PATH ───────────────────────────────────────────────────────
+      // Keep the AudioContext alive and re-adopt everything back into the warm
+      // pool so the next start() is instant with zero new WASM allocations.
+      //
+      // Only sever the two EXTERNAL connections we added in start():
+      //   sourceNode → workletNode   (already gone — sourceNode disconnected above)
+      //   workletNode → rnnoiseSplitNode
+      //   rnnoiseMergeNode → analyzerNode  (already gone — analyzerNode disconnected above)
+      // The INTERNAL chain wiring (splitter→nodes→merger) is intentionally
+      // preserved so the recycled chain is ready to use immediately.
+      try { workletNode.disconnect(rnnoiseSplitNode); } catch (_) {
+        try { workletNode.disconnect(); } catch (_) {}
+      }
+
+      warmWorklet   = workletNode;
+      warmCtx       = audioCtx;
+      warmWorker    = activeWorker;
+      warmRawSab    = activeSabs ? activeSabs.rawSab  : null;
+      warmDenoSab   = activeSabs ? activeSabs.denoSab : null;
+      warmModelUrl  = warmModelUrl; // unchanged — same model was active
+      warmRnnoiseChain = {
+        splitter: rnnoiseSplitNode,
+        merger:   rnnoiseMergeNode,
+        nodes:    [...rnnoiseNodes]
+      };
+      engineReady = true;
     } else {
+      // ── DISCARD PATH ───────────────────────────────────────────────────────
+      // A newer warm context already exists (e.g. model was switched while
+      // this session ran). Close this context and fully discard its nodes.
+      disconnectAll(workletNode);
+      disconnectAll(rnnoiseSplitNode);
+      disconnectAll(rnnoiseMergeNode);
+      for (const node of rnnoiseNodes) {
+        disconnectAll(node);
+        try { node.port.postMessage({ type: 'STOP' }); } catch (_) {}
+      }
       try { audioCtx.close(); } catch (_) {}
       if (activeWorker && warmWorker && activeWorker !== warmWorker) {
         activeWorker.postMessage({ command: 'stop' });
@@ -367,10 +412,14 @@ async function stop(keepStatus) {
     }
   }
 
-  workletNode = null;
-  audioCtx = null;
-  activeWorker = null;
-  activeSabs = null;
+  // Clear active refs — warm pool refs were already set above if recycled.
+  workletNode      = null;
+  audioCtx         = null;
+  activeWorker     = null;
+  activeSabs       = null;
+  rnnoiseSplitNode = null;
+  rnnoiseMergeNode = null;
+  rnnoiseNodes     = [];
 
   if (captureStream) {
     captureStream.getTracks().forEach((track) => track.stop());
