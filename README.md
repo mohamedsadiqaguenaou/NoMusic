@@ -7,8 +7,8 @@
 
 NoMusic is a browser extension that removes background music from tab audio in real time with an entirely local processing pipeline.
 
-Chrome Web Store:
-https://chromewebstore.google.com/detail/fepfnjijcojaoihcekfhonohejglmdbc?utm_source=github.com
+[![Chrome Web Store](imgs/chrome.png)](https://chromewebstore.google.com/detail/fepfnjijcojaoihcekfhonohejglmdbc?utm_source=github.com)
+[![Edge Add-ons](imgs/edge.png)](https://microsoftedge.microsoft.com/addons/detail/gbdhjflcmaleljgbmmmikodompohnoop)
 
 ## What It Does
 
