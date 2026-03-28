@@ -30,6 +30,7 @@ let extensionEnabled  = true;   // defaults ON — loaded from storage below
 let activeTabId       = null;
 let mutedTabs         = new Set();
 let engineWarmed      = false;  // true once offscreen engine is ready to process audio
+let isFullscreenTransition = false; // suppresses tab/window events during OS fullscreen toggle
 
 // ── Restore persisted state ──────────────────────────────────────────────────
 chrome.storage.local.get(['extensionEnabled'], r => {
@@ -204,6 +205,7 @@ async function _doCapture(newTabId) {
       suppressionLevel: 100,
       modelUrl
     }).catch(() => {});
+    injectFullscreenScript(newTabId);
   } catch (err) {
     console.warn('[NoMusic] autoCapture failed for tab', newTabId, ':', err.message);
     // Will retry on next ENGINE_READY, tab switch, or page load
@@ -211,11 +213,13 @@ async function _doCapture(newTabId) {
 }
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  if (isFullscreenTransition) return; // suppress during fullscreen toggle
   if (!(await refreshEnabled())) return;
   await autoCapture(activeInfo.tabId);
 });
 
 chrome.windows.onFocusChanged.addListener(async (windowId) => {
+  if (isFullscreenTransition) return; // suppress during fullscreen toggle
   if (windowId === chrome.windows.WINDOW_ID_NONE) return;
   if (!(await refreshEnabled())) return;
   try {
@@ -233,6 +237,15 @@ function unmuteAll() {
   mutedTabs.clear();
 }
 
+// Inject the fullscreen workaround script into a specific tab.
+// Uses chrome.scripting so no host permissions (<all_urls>) are needed.
+function injectFullscreenScript(tabId) {
+  chrome.scripting.executeScript({
+    target: { tabId },
+    files:  ['content.js']
+  }).catch(() => {}); // tab may not be injectable (e.g. chrome:// pages)
+}
+
 function relayToPopups(msg) {
   chrome.runtime.sendMessage(msg).catch(() => {}); // popup may be closed — ignore
 }
@@ -240,6 +253,34 @@ function relayToPopups(msg) {
 // ── Message routing ──────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+
+  // ── Content Script → Background (Fullscreen Workaround) ───────────────
+  if (msg.type === 'ENTER_FULLSCREEN') {
+    if (sender.tab && sender.tab.windowId && sender.tab.id === activeTabId) {
+      chrome.windows.get(sender.tab.windowId, (win) => {
+        if (win.state === 'fullscreen') return; // already fullscreen, nothing to do
+        chrome.storage.local.set({ [`windowState_${win.id}`]: win.state });
+        isFullscreenTransition = true;
+        chrome.windows.update(win.id, { state: 'fullscreen' }).then(() => {
+          setTimeout(() => { isFullscreenTransition = false; }, 600);
+        }).catch(() => { isFullscreenTransition = false; });
+      });
+    }
+    return false;
+  }
+
+  if (msg.type === 'EXIT_FULLSCREEN') {
+    if (sender.tab && sender.tab.windowId && sender.tab.id === activeTabId) {
+      chrome.storage.local.get([`windowState_${sender.tab.windowId}`], (res) => {
+        const prevState = res[`windowState_${sender.tab.windowId}`] || 'maximized';
+        isFullscreenTransition = true;
+        chrome.windows.update(sender.tab.windowId, { state: prevState }).then(() => {
+          setTimeout(() => { isFullscreenTransition = false; }, 600);
+        }).catch(() => { isFullscreenTransition = false; });
+      });
+    }
+    return false;
+  }
 
   // ── Popup → Background ────────────────────────────────────────────────
   if (msg.type === 'GET_ACTIVE_TAB') {
@@ -290,6 +331,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
 
       activeTabId = msg.tabId;
+      injectFullscreenScript(msg.tabId);
       await ensureOffscreen();
       chrome.runtime.sendMessage({
         type:             'DF_START',
