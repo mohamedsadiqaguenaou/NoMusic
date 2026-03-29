@@ -4,7 +4,6 @@
 
 # NoMusic - Remove Background Music From Videos
 
-
 NoMusic is a browser extension that removes background music from tab audio in real time with an entirely local processing pipeline.
 
 ## Install
@@ -22,6 +21,7 @@ NoMusic is a browser extension that removes background music from tab audio in r
 - Applies RNNoise denoising after enhancement.
 - Auto-follows the active tab when the extension is enabled.
 - Keeps processing on-device with no backend service.
+- Supports native fullscreen for videos while the extension is active.
 - Includes English and Arabic localizations for the popup interface.
 
 The current extension is aimed at people who want to watch online video content without background music.
@@ -35,6 +35,7 @@ The extension is built around a Manifest V3 service worker and an offscreen docu
 - [fastenhancer-worker.js](fastenhancer-worker.js) runs the FastEnhancer ONNX model in a worker.
 - [ring-buffer-audio-processor.js](ring-buffer-audio-processor.js) bridges audio frames between the Web Audio graph and the worker through shared buffers.
 - [rnnoise-worklet.js](rnnoise-worklet.js) runs RNNoise as an AudioWorklet stage.
+- [content.js](content.js) is injected only into the captured tab to detect fullscreen events and synchronize OS-level window state.
 - [popup.js](popup.js) powers the browser action UI.
 
 At a high level, the pipeline is:
@@ -48,6 +49,7 @@ At a high level, the pipeline is:
 
 - [manifest.json](manifest.json): Chrome extension manifest.
 - [background.js](background.js): Manifest V3 service worker.
+- [content.js](content.js): Fullscreen workaround script (injected into the captured tab only).
 - [offscreen.html](offscreen.html): Offscreen host page.
 - [offscreen.js](offscreen.js): Audio processing engine.
 - [popup.html](popup.html): Popup UI.
@@ -68,11 +70,12 @@ At a high level, the pipeline is:
 
 - There is no build step in the current repository. The extension can be loaded directly from source.
 - The audio pipeline uses local model/runtime assets already committed under [assets](assets).
-- Manifest permissions currently include tab capture, tabs, storage, active tab access, and offscreen documents.
+- Manifest permissions include tab capture, tabs, storage, active tab access, offscreen documents, and scripting (used solely to inject the fullscreen helper into the captured tab).
 
 ## Privacy
 
 NoMusic is designed to process audio locally in the browser. This repository does not include a server component, remote inference service, or cloud upload path for captured audio.
+
 
 ## Third-Party Components
 
