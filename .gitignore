@@ -3,3 +3,5 @@ wasm/runtime/target/
 wasm/test/ref/
 __pycache__/
 build-zip.ps1
+dist/
+desktop/target/

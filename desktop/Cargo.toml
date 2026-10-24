@@ -1,0 +1,29 @@
+[package]
+name = "nomusic-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "NoMusic for Windows: removes background music from system audio with FastEnhancer + RNNoise"
+license = "ISC"
+publish = false
+
+[[bin]]
+name = "nomusic"
+path = "src/main.rs"
+
+[features]
+# The FastEnhancer runtime compiles in exactly one model.
+default = ["standard"]
+standard = ["fastenhancer-wasm/model_s"]
+lite = ["fastenhancer-wasm/model_t"]
+
+[dependencies]
+fastenhancer-wasm = { path = "../wasm/runtime", default-features = false }
+nnnoiseless = { version = "0.5", default-features = false }
+hound = "3.5"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
