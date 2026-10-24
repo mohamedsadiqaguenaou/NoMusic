@@ -558,6 +558,11 @@ async function boot() {
     startFiltering();
   }
 
+  // The engine only streams spectrum frames while the popup keeps asking for them.
+  const pingViz = () => chrome.runtime.sendMessage({ type: 'VIZ_WANTED' }, () => void chrome.runtime.lastError);
+  pingViz();
+  setInterval(pingViz, 1000);
+
   // Idle animation loop
   function idleLoop() {
     if (!isActive) drawIdle();
