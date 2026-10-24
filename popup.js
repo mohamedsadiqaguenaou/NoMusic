@@ -127,6 +127,8 @@ let freqData       = null;
 let currentModel   = 'standard'; // 'lite' | 'standard' — loaded from storage in boot()
 let pendingModelSwitch = false;  // true while we're restarting due to a model change
 
+const HAS_TAB_CAPTURE = !!(chrome.tabCapture && chrome.tabCapture.getMediaStreamId);
+
 const MODEL_URLS = {
   lite:     chrome.runtime.getURL('assets/fastenhancer_t.wasm'),
   standard: chrome.runtime.getURL('assets/fastenhancer_s.wasm')
@@ -219,7 +221,8 @@ async function startFiltering() {
     powerBtn.disabled = true;
     setHelper('helperAlmostThere');
 
-    const streamId = await new Promise((resolve, reject) => {
+    // Firefox has no tabCapture: its background filters the tab through a content script instead.
+    const streamId = !HAS_TAB_CAPTURE ? null : await new Promise((resolve, reject) => {
       const opts = activeTabId != null ? { targetTabId: activeTabId } : {};
       chrome.tabCapture.getMediaStreamId(opts, id => {
         if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
@@ -557,6 +560,11 @@ async function boot() {
     setHelper('helperStarting');
     startFiltering();
   }
+
+  // The engine only streams spectrum frames while the popup keeps asking for them.
+  const pingViz = () => chrome.runtime.sendMessage({ type: 'VIZ_WANTED' }, () => void chrome.runtime.lastError);
+  pingViz();
+  setInterval(pingViz, 1000);
 
   // Idle animation loop
   function idleLoop() {

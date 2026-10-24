@@ -6,7 +6,8 @@
   "scripts": {
     "build:wasm": "python wasm/build.py",
     "test:wasm": "python wasm/test/make_reference.py && node wasm/test/verify.mjs",
-    "test": "npm run test:wasm"
+    "test": "npm run test:wasm",
+    "build:firefox": "node scripts/build-firefox.mjs"
   },
   "keywords": [
     "chrome-extension",

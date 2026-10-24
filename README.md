@@ -65,6 +65,25 @@ At a high level, the pipeline is:
 4. Select Load unpacked.
 5. Choose this project folder.
 
+## Firefox
+
+Firefox has neither `chrome.tabCapture` nor offscreen documents, so the Firefox build filters audio inside the page instead:
+
+- [firefox/media-hook.js](firefox/media-hook.js) is a content script. It routes the page's own `<video>` / `<audio>` elements through Web Audio (`createMediaElementSource`) and through the same pipeline as Chrome, inside the page's AudioContext: [firefox/fe-worklet.js](firefox/fe-worklet.js) (FastEnhancer as an AudioWorklet), then the shared RNNoise worklet. The worklets run on the playing tab's real-time audio thread.
+- [firefox/background.js](firefox/background.js) only decides which tab is filtered (auto-follow, muting other tabs), and answers the same popup messages as the Chrome service worker, so the popup is shared.
+
+Build and load it:
+
+1. `npm run build:firefox` (writes `dist/firefox`).
+2. In Firefox, open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and pick `dist/firefox/manifest.json`.
+3. To package it for addons.mozilla.org, run `npx web-ext build -s dist/firefox`.
+
+Limitations compared to Chrome:
+
+- Only HTML media elements are filtered. Audio a page plays straight through its own Web Audio graph (some games and web apps do this) is not captured.
+- Cross-origin media served without CORS headers is left unfiltered. Hooking it would silence it completely. Streaming sites that use Media Source Extensions (`blob:` URLs, e.g. YouTube) work.
+- Pages whose Content-Security-Policy forbids WebAssembly (no `'wasm-unsafe-eval'` / `'unsafe-eval'`) play unfiltered. YouTube allows it.
+
 ## Development Notes
 
 - The extension can be loaded directly from source; the prebuilt `assets/fastenhancer_{s,t}.wasm` modules are committed.
