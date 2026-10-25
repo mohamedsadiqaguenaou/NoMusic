@@ -21,6 +21,7 @@ NoMusic is a browser extension that removes background music from tab audio in r
 - Offers multiple audio models (Standard and Lite) to balance between processing power and audio quality.
 - Runs an RNNoise denoising stage after FastEnhancer enhancement for additional noise suppression.
 - Auto-follows the active tab when the extension is enabled. Turn off **Turn on automatically** in Settings to start filtering only from the power button.
+- Adapts to slow machines: when the model can't keep up, it steps down (mono, then fewer RNNoise passes) instead of stuttering, and suggests the Lite model if that isn't enough. The engine sleeps while nothing is being filtered.
 - Keeps processing on-device with no backend service.
 - Includes English and Arabic localizations for the popup interface.
 

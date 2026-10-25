@@ -57,7 +57,7 @@
         _available_write(rd, wr) { return this.capacity() - this._available_read(rd, wr); }
         _storage_capacity() { return this._capacity; }
         _copy(src, si, dst, di, n) {
-            for (let i = 0; i < n; i++) dst[di + i] = src[si + i];
+            if (n > 0) dst.set(src.subarray(si, si + n), di); // one native copy, not a JS loop
         }
     }
 

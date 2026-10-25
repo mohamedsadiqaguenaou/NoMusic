@@ -30,8 +30,12 @@ class RnnoiseProcessor extends AudioWorkletProcessor {
     this._inCount = 0;
 
     this.port.onmessage = (event) => {
-      if (event.data && event.data.type === 'STOP') this.alive = false;
+      if (!event.data) return;
+      if (event.data.type === 'STOP') this.alive = false;
+      // Load guard step-down: fewer passes (0 = bypass, the frame passes through unchanged and ungated).
+      if (event.data.type === 'SET_PASSES') this._passes = Math.max(0, Math.min(NUM_PASSES, event.data.passes | 0));
     };
+    this._passes = NUM_PASSES;
 
     const { wasmBytes } = options.processorOptions || {};
     if (!wasmBytes) {
@@ -154,13 +158,16 @@ class RnnoiseProcessor extends AudioWorkletProcessor {
         heap[inOff + i] = this.inBuf[(readStart + i) % inLen] * 32768;
       }
 
-      let vad = 0;
-      for (let pass = 0; pass < this._states.length; pass++) {
+      const passes = Math.min(this._passes, this._states.length);
+      let vad = 1;
+      if (passes === 0) {
+        heap.copyWithin(outOff, inOff, inOff + FRAME_SIZE); // bypass
+        this._gateGain = 1;
+      }
+      for (let pass = 0; pass < passes; pass++) {
         vad = this._processFrame(this._states[pass], this._outPtr, this._inPtr);
-        if (pass < this._states.length - 1) {
-          for (let i = 0; i < FRAME_SIZE; i++) {
-            heap[inOff + i] = heap[outOff + i];
-          }
+        if (pass < passes - 1) {
+          heap.copyWithin(inOff, outOff, outOff + FRAME_SIZE);
         }
       }
 

@@ -31,6 +31,7 @@ const TRANSLATIONS = {
     settingContinueLabel:     'Filter audio in the background',
     settingAutoOnLabel:       'Turn on automatically',
     settingLangLabel:         'Language',
+    perfLiteHint:             'This device is struggling. Switch to Lite for smoother sound.',
   },
   ar: {
     brandSubtitle:            'إزالة الموسيقى الخلفية.',
@@ -61,6 +62,7 @@ const TRANSLATIONS = {
     settingContinueLabel:     'استمر في تصفية الصوت في الخلفية',
     settingAutoOnLabel:       'التشغيل تلقائيًا',
     settingLangLabel:         'اللغة',
+    perfLiteHint:             'جهازك يواجه صعوبة. اختر الوضع الخفيف لصوت أكثر سلاسة.',
   }
 };
 
@@ -257,6 +259,8 @@ function stopFiltering() {
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'DF_STATUS') handleStatus(msg);
   if (msg.type === 'DF_FREQ_DATA') freqData = msg.data;
+  // The engine stepped down as far as it can and is still slow: Lite is the remaining fix.
+  if (msg.type === 'DF_PERF' && msg.lightest && currentModel === 'standard') showError(t('perfLiteHint'));
 });
 
 function handleStatus(msg) {

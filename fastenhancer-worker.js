@@ -60,7 +60,7 @@
         _available_write(rd, wr) { return this.capacity() - this._available_read(rd, wr); }
         _storage_capacity() { return this._capacity; }
         _copy(src, si, dst, di, count) {
-            for (let i = 0; i < count; i++) dst[di + i] = src[si + i];
+            if (count > 0) dst.set(src.subarray(si, si + count), di); // one native copy, not a JS loop
         }
     }
 
@@ -93,6 +93,16 @@
     let processing = false;
     let pendingOutputFrame = null;
     let pendingOutputOffset = 0;
+    const pendingOutputBuffer = new Float32Array(HOP_SIZE * CHANNEL_COUNT); // reused: no garbage while running
+
+    // Load guard (from TV Akhi): the share of real time spent in the model, reported about once a second so the
+    // offscreen document can step down to lighter processing on slow machines instead of stuttering.
+    const HOP_MS = (HOP_SIZE / 48000) * 1000;
+    const LOAD_REPORT_HOPS = 94; // ~1 s of audio
+    let busyMs = 0;
+    let busyHops = 0;
+    // Step-down: process the mix of both channels as mono (voices sit in the middle), half the model's work.
+    let forceMono = false;
 
     const stereoInput = new Float32Array(HOP_SIZE * CHANNEL_COUNT);
     const stereoOutput = new Float32Array(HOP_SIZE * CHANNEL_COUNT);
@@ -197,13 +207,22 @@
         const left = channelStates[0];
         const right = channelStates[1];
         let mono = true;
-        for (let i = 0; i < HOP_SIZE; i++) {
-            const base = i * CHANNEL_COUNT;
-            const l = stereoInput[base];
-            const r = stereoInput[base + 1];
-            left.input[i] = l;
-            right.input[i] = r;
-            if (l !== r) mono = false;
+        if (forceMono) {
+            for (let i = 0; i < HOP_SIZE; i++) {
+                const base = i * CHANNEL_COUNT;
+                const m = (stereoInput[base] + stereoInput[base + 1]) * 0.5;
+                left.input[i] = m;
+                right.input[i] = m;
+            }
+        } else {
+            for (let i = 0; i < HOP_SIZE; i++) {
+                const base = i * CHANNEL_COUNT;
+                const l = stereoInput[base];
+                const r = stereoInput[base + 1];
+                left.input[i] = l;
+                right.input[i] = r;
+                if (l !== r) mono = false;
+            }
         }
 
         if (mono) {
@@ -255,10 +274,18 @@
                 if (_audio_reader.availableRead() < HOP_SIZE * CHANNEL_COUNT) return true;
 
                 _audio_reader.dequeue(stereoInput, HOP_SIZE * CHANNEL_COUNT, 0);
+                const started = performance.now();
                 const processed = processStereoFrame();
+                busyMs += performance.now() - started;
+                if (++busyHops >= LOAD_REPORT_HOPS) {
+                    self.postMessage({ type: 'LOAD', load: busyMs / (busyHops * HOP_MS) });
+                    busyMs = 0;
+                    busyHops = 0;
+                }
                 const written = _audio_writer.enqueue(processed, processed.length, 0);
                 if (written < processed.length) {
-                    pendingOutputFrame = new Float32Array(processed);
+                    pendingOutputBuffer.set(processed);
+                    pendingOutputFrame = pendingOutputBuffer;
                     pendingOutputOffset = written;
                     return false;
                 }
@@ -333,6 +360,22 @@
             }
             case 'RESET_BUFFERS': {
                 resetState();
+                busyMs = 0;
+                busyHops = 0;
+                break;
+            }
+            case 'set_mono': {
+                forceMono = !!data.enabled;
+                break;
+            }
+            // Idle (warm, not filtering): stop waking up to poll the empty ring buffer.
+            case 'pause': {
+                stopProcessing();
+                processing = false;
+                break;
+            }
+            case 'resume': {
+                if (fe && _audio_reader) startProcessing();
                 break;
             }
             case 'stop': {

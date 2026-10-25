@@ -40,6 +40,18 @@ const KEEPALIVE_MS = 20000;       // < 30 s MV3 service-worker idle timeout
 let isActive = false;
 let startInProgress = false;
 
+// ── Load guard (ported from TV Akhi) ─────────────────────────────────────────
+// The worker reports the share of real time spent in FastEnhancer about once a second. On a slow machine,
+// sustained high load means stutter is coming, so step down to lighter processing, one step at a time:
+//   1. mono: process the mix of both channels once (voices sit in the middle): half the model's work;
+//   2. one RNNoise pass instead of two;   3. RNNoise off.
+// After the last step the popup suggests the Lite model. Every new session starts at full quality again.
+const LIGHTEN_LOAD = 0.75;   // share of real time in the model (the worker thread can't go much past ~1)
+const LIGHTEN_AFTER_S = 3;   // consecutive slow reports before stepping down
+const LIGHTEN_STEPS = ['mono', 'one RNNoise pass', 'RNNoise off'];
+let lightenStep = 0;
+let slowReports = 0;
+
 let warmCtx = null;
 let warmWorklet = null;
 let warmWorker = null;
@@ -58,6 +70,32 @@ let rnnoiseLoading = null;
 
 function sendStatus(state, extra) {
   chrome.runtime.sendMessage({ type: 'DF_STATUS', state, ...(extra || {}) }).catch(() => {});
+}
+
+function setRnnoisePasses(passes) {
+  for (const node of rnnoiseNodes) {
+    try { node.port.postMessage({ type: 'SET_PASSES', passes }); } catch (_) {}
+  }
+}
+
+function resetLoadGuard(worker) {
+  lightenStep = 0;
+  slowReports = 0;
+  worker.postMessage({ command: 'set_mono', enabled: false });
+  setRnnoisePasses(2);
+}
+
+function onWorkerLoad(load) {
+  slowReports = load > LIGHTEN_LOAD ? slowReports + 1 : 0;
+  if (slowReports < LIGHTEN_AFTER_S || lightenStep >= LIGHTEN_STEPS.length || !activeWorker) return;
+  slowReports = 0;
+  const step = LIGHTEN_STEPS[lightenStep++];
+  if (step === 'mono') activeWorker.postMessage({ command: 'set_mono', enabled: true });
+  else setRnnoisePasses(step === 'one RNNoise pass' ? 1 : 0);
+  console.info('[NoMusic] slow machine: model at ' + Math.round(load * 100) + '% of real time, now ' + step);
+  chrome.runtime.sendMessage({
+    type: 'DF_PERF', step, lightest: lightenStep >= LIGHTEN_STEPS.length
+  }).catch(() => {});
 }
 
 // ── FastEnhancer module cache ────────────────────────────────────────────────
@@ -286,6 +324,10 @@ async function preWarmEngine(modelUrl) {
     engineReady = true;
     warming = null;
 
+    // Idle until the first start: no worker or audio thread wake-ups while nothing is filtered.
+    worker.postMessage({ command: 'pause' });
+    await ctx.suspend().catch(() => {});
+
     chrome.runtime.sendMessage({ type: 'ENGINE_READY' }).catch(() => {});
     scheduleModulePrefetch();
   })().catch((err) => {
@@ -336,9 +378,14 @@ async function start({ streamId, suppressionLevel = 100, modelUrl }) {
 
     worker.postMessage({ command: 'RESET_BUFFERS' });
     worker.postMessage({ command: 'set_suppression_level', level: suppressionLevel });
+    worker.postMessage({ command: 'resume' });
 
     worker.onmessage = (event) => {
       const data = event.data || {};
+      if (data.type === 'LOAD') {
+        onWorkerLoad(data.load);
+        return;
+      }
       if (data.type === 'ERROR') {
         console.error('[NoMusic FastEnhancer worker error]', data.error);
         sendStatus('error', { error: 'FastEnhancer worker error: ' + data.error });
@@ -370,6 +417,7 @@ async function start({ streamId, suppressionLevel = 100, modelUrl }) {
     rnnoiseSplitNode = rnnoiseChain ? rnnoiseChain.splitter : null;
     rnnoiseMergeNode = rnnoiseChain ? rnnoiseChain.merger : null;
     rnnoiseNodes = rnnoiseChain ? rnnoiseChain.nodes : [];
+    resetLoadGuard(worker);
     for (const node of rnnoiseNodes) {
       node.onprocessorerror = (err) => {
         console.error('[NoMusic RNNoise processor error]', err);
@@ -474,6 +522,9 @@ async function stop(keepStatus) {
         nodes:    [...rnnoiseNodes]
       } : null;
       engineReady = true;
+      // Idle until the next start: no worker or audio thread wake-ups while nothing is filtered.
+      try { if (warmWorker) warmWorker.postMessage({ command: 'pause' }); } catch (_) {}
+      warmCtx.suspend().catch(() => {});
     } else {
       // ── DISCARD PATH ───────────────────────────────────────────────────────
       // A newer warm context already exists (e.g. model was switched while

@@ -417,7 +417,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return false;
   }
 
-  if (msg.type === 'DF_FREQ_DATA') {
+  if (msg.type === 'DF_FREQ_DATA' || msg.type === 'DF_PERF') {
     relayToPopups(msg);
     return false;
   }
