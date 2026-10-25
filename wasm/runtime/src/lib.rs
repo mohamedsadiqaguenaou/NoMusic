@@ -104,6 +104,16 @@ impl Stream {
         self.enhanced.fill(0.0);
     }
 
+    /// HOP-sized input buffer, read by the next `process()` (for native Rust callers).
+    pub fn input_mut(&mut self) -> &mut [f32] {
+        &mut self.input
+    }
+
+    /// HOP-sized output buffer, written by `process()` (for native Rust callers).
+    pub fn output(&self) -> &[f32] {
+        &self.output
+    }
+
     /// Make this stream's recurrent/overlap state identical to `src`.
     pub fn copy_state_from(&mut self, src: &Stream) {
         for (d, s) in self.cur.iter_mut().zip(src.cur.iter()) {

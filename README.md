@@ -54,6 +54,7 @@ At a high level, the pipeline is:
 - [popup.js](popup.js): Popup behavior.
 - [styles.css](styles.css): Popup styling.
 - [assets](assets): Bundled model and runtime assets.
+- [desktop](desktop): native Windows build of the pipeline (see [desktop/README.md](desktop/README.md)).
 - [wasm](wasm): ONNX → WASM compiler, Rust runtime kernels, and verification tests for the FastEnhancer modules (see [wasm/README.md](wasm/README.md)).
 - [icons](icons): Extension icons.
 
